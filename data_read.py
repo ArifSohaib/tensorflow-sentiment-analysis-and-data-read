@@ -10,6 +10,19 @@ lemmatizer = WordNetLemmatizer()
 import numpy as np
 
 def init_process(fin, fout):
+    """
+        converts the raw sentiment140 data into required format.
+        Format has 3 category labels and then the tweet
+        the seperator used is '|' and any use of the character '|' in tweets has ben replaced with a space
+        This had to be done instead of multi char seperator as both python's csv module and tensorflow's csv decoder require single character seperator
+        Args:
+            fin: string filename of input file
+            fout: string filename of output file
+        Returns:
+            None
+        Creates:
+            csv file named fout
+    """
     outfile = open(fout, 'a')
     with open(fin, buffering=200000, encoding='latin-1') as f:
         csvreader = csv.reader(f, quotechar='"')
@@ -104,21 +117,22 @@ def read_record(filename_queue):
     return raw_tweet_op, label_op
 
 
-def get_vector(filename_queue,lexicon):
+def get_vector(filename_queue,lexicon,sess,coord,threads):
     """
     Does preprocessing to convert raw_tweet returned from the tensorflow reader to vector
     Args:
-        filename_queue:
-        lexicon:
+        filename_queue: tensorflow filename_queue that feeds in the files to process
+        lexicon: the lexicon, premade using training data and loaded from pickle file
     Returns:
-        feature_vec:
+        features: feature vector showing if a word is in the tweet
+        label: labels showing the sentiment polarity
     """
     raw_tweet_op,label_op = read_record(filename_queue)
     with tf.Session() as sess:
+        # sess.run(tf.initialize_local_variables())
+        # coord = tf.train.Coordinator()
+        # threads = tf.train.start_queue_runners(coord = coord)
         sess.run(tf.initialize_local_variables())
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(coord = coord)
-
         raw_tweet, label = sess.run([raw_tweet_op, label_op])
         # print(label)
         print(raw_tweet)
@@ -132,24 +146,41 @@ def get_vector(filename_queue,lexicon):
         if word.lower() in lexicon:
             index_value = lexicon.index(word.lower())
             features[index_value] += 1
+    # print(features)
     return list(features), label
 
 
-def input_pipeline(filename_queue, batch_size, lexicon,num_epochs=None):
+def input_pipeline(filename_queue, batch_size, lexicon,sess,coord,threads,num_epochs=None):
+    """
+        Reads multiple lines of data and then creates a batch of size batch_size
+        Args:
+
+    """
     # filename_queue = tf.train.string_input_producer(filenames, num_epochs=num_epochs, shuffle=True)
-    example, label = get_vector(filename_queue,lexicon)
+    example, label = get_vector(filename_queue,lexicon,sess, coord, threads)
     # min_after_dequeue defines how big a buffer we will randomly sample
     #   from -- bigger means better shuffling but slower start up and more
     #   memory used.
     # capacity must be larger than min_after_dequeue and the amount larger
     #   determines the maximum we will prefetch.  Recommendation:
     #   min_after_dequeue + (num_threads + a small safety margin) * batch_size
-    min_after_dequeue = 10000
+    min_after_dequeue = 1000
     capacity = min_after_dequeue + 3 * batch_size
     example_batch, label_batch = tf.train.shuffle_batch([example, label], batch_size=batch_size, capacity=capacity,
       min_after_dequeue=min_after_dequeue)
 
     return example_batch, label_batch
+
+# import pandas as pd
+import random
+def shuffle_data(fin):
+    with open(fin,'r') as source:
+        data = [ (random.random(), line) for line in source ]
+    data.sort()
+    with open('shuffled_train_data.csv','w') as target:
+        for _, line in data:
+            target.write( line )
+
 
 def main():
     """uncomment to make the csv file"""
@@ -195,7 +226,7 @@ def main():
             sess.run(tf.initialize_local_variables())
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coord)
-            feature_op, label_op = input_pipeline(filename_queue, 100, lexicon,num_epochs=1)
+            feature_op, label_op = input_pipeline(filename_queue, 100, lexicon,sess,coord,threads,num_epochs=1)
             count = 0
             while not coord.should_stop():
                 features = sess.run(feature_op)
@@ -214,8 +245,15 @@ def main():
     # print(get_vector(filename_queue,lexicon))
 
 if __name__ == '__main__':
-    import time
-    start = time.time()
-    main()
-    fin = time.time()
-    print(fin-start)
+    """
+        Read the comments and file and the main function to see how to use
+    """
+    # import time
+    # start = time.time()
+    # main()
+    # fin = time.time()
+    # print(fin-start)
+    # shuffle_data('train_data.csv')
+    with open('shuffled_train_data.csv','r') as f:
+        for i in range(10):
+            print(f.readline())
