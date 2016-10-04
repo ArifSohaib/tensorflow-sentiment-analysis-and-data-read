@@ -48,7 +48,7 @@ tf_log = 'tf.log'
 def train_neural_network(x):
     prediction = neural_network_model(x)
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(prediction, y))
-    optimizer = tf.train.AdamOptimizer(learning_rate = 0.001).minimize(cost)
+    optimizer = tf.train.AdamOptimizer().minimize(cost)
     filename_queue = tf.train.string_input_producer(['shuffled_train_data.csv'],num_epochs=hm_epochs)
     with open('../lexicon.pickle', 'rb') as f:
         lexicon = pickle.load(f)
@@ -63,7 +63,8 @@ def train_neural_network(x):
         except:
             epoch = 1
 
-        while epoch < hm_epochs:
+        # while epoch < hm_epochs:
+        try:
             if epoch != 1:
                 saver.restore(sess, "model.ckpt")
             epoch_loss=1
@@ -91,44 +92,72 @@ def train_neural_network(x):
                     batches_run += 1
                     print('sample label: {}'.format(label))
                     print('Batch run: {}/{} | Epoch: {} | Batch Loss: {}'.format(batches_run,total_batches, epoch, c))
-            saver.save(sess, 'model.ckpt')
-            print('Epoch: {}, completed out of {}, Loss = {}'.format(epoch, hm_epochs, epoch_loss))
-            with open(tf_log, 'a') as f:
-                f.write(str(epoch)+'\n')
-            epoch +=1
+                if batches_run == total_batches: #meaning one epoch completed
+                    saver.save(sess, 'model.ckpt')
+                    print('Epoch: {}, completed out of {}, Loss = {}'.format(epoch, hm_epochs, epoch_loss))
+                    with open(tf_log, 'a') as f:
+                        f.write(str(epoch)+'\n')
+                        epoch +=1
+                    batches_run=0 #reset the counter
+        except tf.errors.OutOfRangeError:
+            print("Done training, epoch reached")
+        finally:
             coord.request_stop()
             threads.join(coord)
-            # with open('train_set_shuffled.csv',buffering=20000,encoding='latin-1') as f:
-            #     batch_x = []
-            #     batch_y = []
-            #     batches_run = 0
-            #     for line in f:
-            #         label = line.split(':::')[0]
-            #         tweet = line.split(':::')[1]
-            #         current_words = word_tokenize(tweet.lower())
-            #         current_words = [lemmatizer.lemmatize(i) for i in current_words]
-            #
-            #         features = np.zeros(len(lexicon))
-            #
-            #         for word in current_words:
-            #             if word.lower() in lexicon:
-            #                 index_value = lexicon.index(word.lower())
-            #                 features[index_value] += 1
-            #         line_x = list(features)
-            #         line_y = eval(label)
-            #         batch_x.append(line_x)
-            #         batch_y.append(line_y)
-            #         if len(batch_x) >= batch_size:
-            #             _,c = sess.run([optimizer, cost], feed_dict={x:np.array(batch_x), y:np.array(batch_y)})
-            #             epoch_loss += c
-            #             #empty the batch
-            #             batch_x = []
-            #             batch_y = []
-            #             batches_run += 1
-            #             print('Batch run: {}/{} | Epoch: {} | Batch Loss: {}'.format(batches_run,total_batches, epoch, c))
-            # saver.save(sess, 'model.ckpt')
-            # print('Epoch: {}, completed out of {}, Loss = {}'.format(epoch, hm_epochs, epoch_loss))
-            # with open(tf_log, 'a') as f:
-            #     f.write(str(epoch)+'\n')
-            # epoch += 1
+
 train_neural_network(x)
+
+def test_neural_network():
+    prediction = neural_network_model(x)
+    filename_queue = tf.train.string_input_producer(['test_data.csv'],num_epochs=1)
+    correct = tf.equal(tf.argmax(prediction, 1), tf.argmax(y, 1))
+    accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
+    feature_sets = []
+    labels = []
+    counter = 0
+    with open('../lexicon.pickle','rb') as f:
+        lexicon = pickle.load(f)
+    tweet_op, label_op = read_record(filename_queue)
+    with tf.Session() as sess:
+        sess.run(tf.initialize_all_variables())
+        sess.run(tf.initialize_local_variables())
+        # for epoch in range(hm_epochs):
+        try:
+            # print(saver.latest_checkpoint())
+            saver.restore(sess,"model.ckpt")
+            print('restored network')
+        except Exception as e:
+            print(str(e))
+            # epoch_loss = 0
+        try:
+            coord = tf.train.Coordinator()
+            threads = tf.train.start_queue_runners(coord = coord)
+            print(type(threads))
+            while not coord.should_stop():
+                tweet_raw, label = sess.run([tweet_op,label_op])
+                # print(tweet_raw)
+                tweet = str(tweet_raw, 'utf-8')
+                # print(tweet)
+                features = np.zeros(len(lexicon))
+                for word in tweet:
+                    if word.lower() in lexicon:
+                        index_value = lexicon.index(word.lower())
+                        features[index_value] +=1
+                feature_sets.append(features)
+                labels.append(label)
+
+        except tf.errors.OutOfRangeError:
+            test_x = np.array(feature_sets)
+            test_y = np.array(labels)
+            print(test_x.shape)
+            print(test_y.shape)
+            # correct_example = sess.run(correct, feed_dict={x:feature_sets,y:labels})
+            # print(correct_example)
+            print('Accuracy:',accuracy.eval({x:test_x, y:test_y}))
+            print("Epoch complete")
+        finally:
+            coord.request_stop()
+            # threads.join(coord)
+
+print('testing net')
+test_neural_network()
