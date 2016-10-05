@@ -40,21 +40,35 @@ reader = tf.TextLineReader()
 and a line reading operation is declared like this
 key, value = reader.read(filename_queue) where key is the line being read and is assigned by tensorflow automatically
 After this, we need to describe the data format in the csv and give default values for each column. These are also used to find the data type and convert automatically from raw string
-for example if a line contains a numeric value we use:
+for example if a line contains a numeric value we use:\n
+```python
 val_default = tf.constant([0])
-or if it contains a string we use:
+```
+or if it contains a string we use:\n
+```python
 str_default = tf.constant(['default string'])
-note that lists can not be used in default values so
+```
+note that lists can not be used in default values so\n
+```python
 lst_dafault = tf.constant([[0][1][2]]) returns an error
-for simplicity, all the default values can be put in a list before being passed to the csv decoder
+```
+for simplicity, all the default values can be put in a list before being passed to the csv decoder\n
+```python
 record_defaults = [default1, default2, default3]
+```
 where each default represents one column separated by a given one character delimiter. Note that it has to be a one character delimiter due to the internal C operation requiring one char delimiter.
-The decoding can be done using the following function
+The decoding can be done using the following function\n
+```python
 tf.decode_csv(value, record_defaults=record_defaults,field_delim='|')
-here, each default value in the record_defaults list results in a tensorflow operation. For example if we have 3 default values we have
+```
+here, each default value in the record_defaults list results in a tensorflow operation. For example if we have 3 default values we have\n
+```python
 default1_op, default2_op, default3_op = tf.decode_csv(value, record_defaults=record_defaults,field_delim='|')
-where all the returned values are tensorflow operations that return the mentioned column when run
-Before running the operations from the tensorflow csv decoder, we need to use a queue runner which should be coordinated by a coordinator and this needs to be done within the tensorflow session
-coord = tf.train.Coordinator()
-threads = tf.train.start_queue_runners(coord=coord)
+```
+where all the returned values are tensorflow operations that return the mentioned column when run\n
+Before running the operations from the tensorflow csv decoder, we need to use a queue runner which should be coordinated by a coordinator and this needs to be done within the tensorflow session\n
+```python
+coord = tf.train.Coordinator()\n
+threads = tf.train.start_queue_runners(coord=coord)\n
+```
 after this, each time the operations from the decoder are run, they return their respective column from one line of the input files
