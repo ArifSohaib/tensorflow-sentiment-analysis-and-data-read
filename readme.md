@@ -72,3 +72,26 @@ coord = tf.train.Coordinator()
 threads = tf.train.start_queue_runners(coord=coord)
 ```
 after this, each time the operations from the decoder are run, they return their respective column from one line of the input files
+
+There are two ways to run the operations.
+If you want to get only some lines, then they can be run in a loop.
+```python
+for _ in range(10):
+  col1, col2 = sess.run([default1_op, default2_op])
+```
+gets 10 lines.
+The other option is to read the whole data set by setting a number of epochs in the filename queue and then
+```python
+while not coord.should_stop():
+  col1, col2 = sess.run([default1_op, default2_op])
+```
+reads the whole dataset for the specified number of epochs
+
+There is also an option to read data in batches.However I did not use it in this example as the preprocessing here required converting each tweet into a feature vector which required running the operations from the tensorflow csv decoder instead of doing the whole preprocessing within tensorflow. While this could be possible, it caused errors in my case so I am reading the file line by line in this tutorial.
+I might use and describe this in a future tutorial but you can see the unfinished version I tried in the data_read.py file.
+
+#NOTE1
+the neural_net.py and data_read.py have been annotated to be usable for a tutorial in addition to this writeup.
+#NOTE2
+If you have any comments or issues with the tutorial, please feel free to contact me at arif_sohaib@outlook.com
+Additionally, I am currently available for freelance projects in tensorflow or caffe  

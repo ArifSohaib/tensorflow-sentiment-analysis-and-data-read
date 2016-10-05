@@ -27,10 +27,14 @@ def init_process(fin, fout):
     with open(fin, buffering=200000, encoding='latin-1') as f:
         csvreader = csv.reader(f, quotechar='"')
         for line in csvreader:
+            #the tweet is in the last column
+            #replace any " in the tweet with null
             line[-1] = line[-1].replace('"','')
+            #replace any "|" in the tweet with space as "|" will be used as a delimiter later
             line[-1] = line[-1].replace("|","  ")
+            #The category is in the first column
             initial_polarity = line[0]
-            # print(line[0])
+
 #                As mentioned above, in the markdown, using one-hot vector does not work
 #               However, I found later that the issue was that the record_defaults parameter in
 #               tensorflow's decode_csv can't take a list
@@ -51,7 +55,7 @@ def init_process(fin, fout):
 
 def read_to_vec(fin, lexicon):
     """generates a vector for a line(USE GENERATOR)
-    this function is just for demonstration purposes, to show how the feature vector and category vector is returned later in tensorflow
+    this function is just for demonstration purposes, to show how the feature vector and category vector should be returned later in tensorflow.
     it works but it will be slower
     Args:
         fin: filename to read from
@@ -78,9 +82,7 @@ def read_to_vec(fin, lexicon):
 
 def read_record(filename_queue):
     """
-    NOTE: To be completed,
-    PROBLEM: I can't figure out how to do both the read and the conversion while still in the tensorflow op
-    so I am currently reading from decode_csv, then calling the same, then converting and then retrning the converted feature vec
+    Outputs tensorflow ops to read one tweet and one set of labels
     Args:
         filename_queue: tensorflow queue that contains the files to be read
         lexicon: the lexicon, premade using training data and loaded from pickle file
@@ -93,33 +95,28 @@ def read_record(filename_queue):
 
     reader = tf.TextLineReader()
     key, value = reader.read(filename_queue)
+    #default value of positive label
     cat1_default = tf.constant([0])
+    #default value of neutral label
     cat2_default = tf.constant([1])
+    #default value of negative label
     cat3_default = tf.constant([0])
+    #default value of tweet
     tweet_default = tf.constant(['default tweet'])
+    #combine the default values in a list
     record_defaults = [cat1_default,cat2_default,cat3_default, tweet_default]
+    #get ops to read the values
     cat1, cat2, cat3, raw_tweet_op = tf.decode_csv(value, record_defaults=record_defaults,field_delim='|')
-
-    #Run the op to get the string features
-    # coord = tf.train.Coordinator()
-    # threads = tf.train.start_queue_runners(coord=coord)
-    # raw_tweet = sess.run(raw_tweet_op)
-    # tweet = str(raw_tweet,'utf-8')
-    # features = np.zeros(len(lexicon))
-    # for word in tweet:
-    #     if word.lower() in lexicon:
-    #         index_value = lexicon.index(word.lower())
-    #         features[index_value] +=1
-    # feature_op = tf.pack(list(features))
+    #combine the labels into one list
     label_op = tf.pack([cat1,cat2,cat3])
-    # coord.request_stop()
-    # coord.join(threads)
+
     return raw_tweet_op, label_op
 
 
 def get_vector(filename_queue,lexicon,sess,coord,threads):
     """
     Does preprocessing to convert raw_tweet returned from the tensorflow reader to vector
+    Made for the batch reading but does not currently work
     Args:
         filename_queue: tensorflow filename_queue that feeds in the files to process
         lexicon: the lexicon, premade using training data and loaded from pickle file
@@ -153,10 +150,21 @@ def get_vector(filename_queue,lexicon,sess,coord,threads):
 def input_pipeline(filename_queue, batch_size, lexicon,sess,coord,threads,num_epochs=None):
     """
         Reads multiple lines of data and then creates a batch of size batch_size
+        NOTE: does not currently work
         Args:
-
+            filename_queue: the tensorflow queue from which to read the file
+            batch_size: the size of the batch to output
+            lexicon: the lexicon containing the words
+            sess: the tensorflow session in which to run the operations
+            coord: the coordinator used in the session
+            threads: the threads used in the session
+            num_epochs: the number of epochs to run this for
+        Returns:
+            example_batch: batch of example feature vectors
+            label_batch: batch of labels
     """
     # filename_queue = tf.train.string_input_producer(filenames, num_epochs=num_epochs, shuffle=True)
+    #get one preprosed example and one label
     example, label = get_vector(filename_queue,lexicon,sess, coord, threads)
     # min_after_dequeue defines how big a buffer we will randomly sample
     #   from -- bigger means better shuffling but slower start up and more
@@ -164,16 +172,21 @@ def input_pipeline(filename_queue, batch_size, lexicon,sess,coord,threads,num_ep
     # capacity must be larger than min_after_dequeue and the amount larger
     #   determines the maximum we will prefetch.  Recommendation:
     #   min_after_dequeue + (num_threads + a small safety margin) * batch_size
-    min_after_dequeue = 1000
+    min_after_dequeue = 10000
     capacity = min_after_dequeue + 3 * batch_size
     example_batch, label_batch = tf.train.shuffle_batch([example, label], batch_size=batch_size, capacity=capacity,
       min_after_dequeue=min_after_dequeue)
 
     return example_batch, label_batch
 
-# import pandas as pd
+
 import random
 def shuffle_data(fin):
+    """
+    function to shuffle input data as it is ordered by default with all the negative tweets first so this is required to mix the tweet categories
+    Args:
+        fin: string filename of file to shuffle
+    """
     with open(fin,'r') as source:
         data = [ (random.random(), line) for line in source ]
     data.sort()
@@ -219,30 +232,37 @@ def main():
     # coord.join(threads)
 
     """uncomment to test the batch generator"""
-    filename_queue = tf.train.string_input_producer(['test_data.csv'],num_epochs=1)
-    try:
-        with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
-            sess.run(tf.initialize_local_variables())
-            coord = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(coord=coord)
-            feature_op, label_op = input_pipeline(filename_queue, 100, lexicon,sess,coord,threads,num_epochs=1)
-            count = 0
-            while not coord.should_stop():
-                features = sess.run(feature_op)
-                # print(features)
-                print(str(features[0],'utf-8'))
-                count +=1
-                print(count)
-    except tf.errors.OutOfRangeError:
-        print("Done training, epoch reached")
-    finally:
-        coord.request_stop()
-    coord.join(threads)
+    # filename_queue = tf.train.string_input_producer(['test_data.csv'],num_epochs=1)
+    # try:
+    #     with tf.Session() as sess:
+    #         sess.run(tf.initialize_all_variables())
+    #         sess.run(tf.initialize_local_variables())
+    #         coord = tf.train.Coordinator()
+    #         threads = tf.train.start_queue_runners(coord=coord)
+    #         feature_op, label_op = input_pipeline(filename_queue, 100, lexicon,sess,coord,threads,num_epochs=1)
+    #         count = 0
+    #         while not coord.should_stop():
+    #             features = sess.run(feature_op)
+    #             # print(features)
+    #             print(str(features[0],'utf-8'))
+    #             count +=1
+    #             print(count)
+    # except tf.errors.OutOfRangeError:
+    #     print("Done training, epoch reached")
+    # finally:
+    #     coord.request_stop()
+    # coord.join(threads)
 
     """uncomment to test the get_vector function"""
     # filename_queue = tf.train.string_input_producer(['test_data.csv'],num_epochs=None)
     # print(get_vector(filename_queue,lexicon))
+
+
+    """uncomment to shuffle the input file and check 10 records"""
+    # shuffle_data('train_data.csv')
+    # with open('shuffled_train_data.csv','r') as f:
+    #     for i in range(10):
+    #         print(f.readline())
 
 if __name__ == '__main__':
     """
@@ -253,7 +273,3 @@ if __name__ == '__main__':
     # main()
     # fin = time.time()
     # print(fin-start)
-    # shuffle_data('train_data.csv')
-    with open('shuffled_train_data.csv','r') as f:
-        for i in range(10):
-            print(f.readline())
