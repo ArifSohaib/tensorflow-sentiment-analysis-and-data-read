@@ -151,11 +151,13 @@ def train_neural_network(x):
                     batch_y = []
                     #increment the batch counter
                     batches_run += 1
-
-                    print('sample label: {}'.format(label))
+                    #print the label of the last example in the batch for debugging/sanity check
+                    # print('sample label: {}'.format(label))
+                    #show the batch loss and the number of batches run in the given epoch
                     print('Batch run: {}/{} | Epoch: {} | Batch Loss: {}'.format(batches_run,total_batches, epoch, c))
                 if batches_run == total_batches: #meaning one epoch completed
                     saver.save(sess, 'model.ckpt') #save the variables at each epoch
+
                     print('Epoch: {}, completed out of {}, Loss = {}'.format(epoch, hm_epochs, epoch_loss))
                     with open(tf_log, 'a') as f:
                         f.write(str(epoch)+'\n')
@@ -167,7 +169,7 @@ def train_neural_network(x):
             coord.request_stop()
             threads.join(coord)
 
-train_neural_network(x)
+# train_neural_network(x)
 
 def test_neural_network():
     """
@@ -251,6 +253,7 @@ def test_neural_network():
             # accuracy.eval is just a different way of saying sess.run(accuracy, feed_dict={x:test_x, y:test_y})
             print('Accuracy:',accuracy.eval({x:test_x, y:test_y}))
             print("Epoch complete")
+        #stop the coordinator and join the threads
         finally:
             coord.request_stop()
             # threads.join(coord)
