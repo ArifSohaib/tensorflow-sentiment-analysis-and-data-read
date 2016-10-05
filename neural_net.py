@@ -17,7 +17,7 @@ batch_size=128
 #there are 1600000 lines in the training data
 total_batches = int(1600000/batch_size)
 #total number of epochs(epoch is number of times the whole data set is seen )
-hm_epochs = 15
+hm_epochs = 5
 #placeholders for the input and output
 x = tf.placeholder(tf.float32,shape=[None, 2638])
 y = tf.placeholder(tf.float32)
@@ -93,8 +93,7 @@ def train_neural_network(x):
         lexicon = pickle.load(f)
     #tensorflow operations to get one tweet and one set of one-hot labels from the input file
     tweet_op, label_op = read_record(filename_queue)
-    #TODO: Add description
-    batch_counter = 0
+
     #All tensorflow operations need to be run from a session
     with tf.Session() as sess:
         #the tensorflow variables(eg; weights and biases declared earlier) have to be initialized using this function
@@ -119,6 +118,7 @@ def train_neural_network(x):
             batch_x = []
             #the batch of labels
             batch_y = []
+            #to keep track of the number of batches run in one epoch
             batches_run = 0
             #the following two lines are essencial for using tensorflow's data reader from the file queue (filename_queue) above
             coord = tf.train.Coordinator()
@@ -132,7 +132,7 @@ def train_neural_network(x):
                 tweet = str(raw_tweet,'utf-8')
                 #a numpy array of zeros representing, each representing one word in the lexicon
                 features = np.zeros(len(lexicon))
-                #if any word in the tweet is in the lexicon, we increment its count
+                #if any word in the tweet is in the lexicon, we increment its count in the feature vector
                 for word in tweet:
                     if word.lower() in lexicon:
                         index_value = lexicon.index(word.lower())
@@ -167,54 +167,88 @@ def train_neural_network(x):
             coord.request_stop()
             threads.join(coord)
 
-# train_neural_network(x)
+train_neural_network(x)
 
 def test_neural_network():
+    """
+    Function to test the neural network
+
+    """
+    #tensorflow op to get prediction
     prediction = neural_network_model(x)
+    #tensorflow queue for the input file
     filename_queue = tf.train.string_input_producer(['test_data.csv'],num_epochs=1)
+    #tensorflow op to check if prediction is correct
+    #the argmax function gives the index of the maximum value on the given axis. In this case axis 1
+    #axis 1 meaning the row axis here
     correct = tf.equal(tf.argmax(prediction, 1), tf.argmax(y, 1))
+    #tensorflow operation to get the accuracy of the classifier
+    #it converts the result of the previous op from boolean to float32 and then takes the mean over the result
     accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
+    #lists for features and labels for the input
     feature_sets = []
     labels = []
-    counter = 0
+
+    #get the lexicon
     with open('../lexicon.pickle','rb') as f:
         lexicon = pickle.load(f)
+    #tensorflow operation to get one tweet and one set of labels
     tweet_op, label_op = read_record(filename_queue)
     with tf.Session() as sess:
+        #initialize the saved variables
         sess.run(tf.initialize_all_variables())
+        #this is required to initialize the internal epoch counter used by the filename_queue
         sess.run(tf.initialize_local_variables())
-        # for epoch in range(hm_epochs):
+        #get the trained model or show an error
         try:
             # print(saver.latest_checkpoint())
             saver.restore(sess,"model.ckpt")
             print('restored network')
         except Exception as e:
             print(str(e))
-            # epoch_loss = 0
+
         try:
+            #tensorflow coordinator to coordinate the threads
             coord = tf.train.Coordinator()
+            #tensorflow queue runner required to get input from the filename_queue
             threads = tf.train.start_queue_runners(coord = coord)
-            print(type(threads))
+            #run the following until the number of epochs specified in filename_queue are completed
             while not coord.should_stop():
+                #get one tweet as binary string and one set of labels
                 tweet_raw, label = sess.run([tweet_op,label_op])
+                #if you want to see the tweet, uncomment the line below
                 # print(tweet_raw)
+                #convert the tweet to utf-8, python3's default string encoding
                 tweet = str(tweet_raw, 'utf-8')
+                #uncomment below to see the converted tweet
                 # print(tweet)
+                #initialize a numpy array of zeros for each word in the lexicon
                 features = np.zeros(len(lexicon))
+                #if a word in the tweet is in the lexicon, increment the count of that word in the feature vector
                 for word in tweet:
                     if word.lower() in lexicon:
                         index_value = lexicon.index(word.lower())
                         features[index_value] +=1
+                #append the feature vector and label to the input list
                 feature_sets.append(features)
                 labels.append(label)
-
+        #since the test file is small, the whole file is processed in the above lines
+        #when this is done we get an OutOfRangeError meaning the epochs specified have been completed
+        #in this case, we only need 1 epoch and when it is complete we classify the test data
         except tf.errors.OutOfRangeError:
+            #convert the lists to numpy arrays
             test_x = np.array(feature_sets)
             test_y = np.array(labels)
-            print(test_x.shape)
-            print(test_y.shape)
+            #for debugging pruposes, the shape of the numpy array can be checked
+            #the first dimension should equal the number of lines in the test csv
+            # print(test_x.shape)
+            # print(test_y.shape)
+            #uncomment below if you want to see the actual boolean array that shows which examples were correctly classified
             # correct_example = sess.run(correct, feed_dict={x:feature_sets,y:labels})
             # print(correct_example)
+            # print(correct_example.shape)
+            # get the accuracy by running the accuracy operation
+            # accuracy.eval is just a different way of saying sess.run(accuracy, feed_dict={x:test_x, y:test_y})
             print('Accuracy:',accuracy.eval({x:test_x, y:test_y}))
             print("Epoch complete")
         finally:
