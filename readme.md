@@ -48,27 +48,27 @@ or if it contains a string we use:\n
 ```python
 str_default = tf.constant(['default string'])
 ```
-note that lists can not be used in default values so\n
+note that lists can not be used in default values so
 ```python
 lst_dafault = tf.constant([[0][1][2]]) returns an error
 ```
-for simplicity, all the default values can be put in a list before being passed to the csv decoder\n
+for simplicity, all the default values can be put in a list before being passed to the csv decoder
 ```python
 record_defaults = [default1, default2, default3]
 ```
 where each default represents one column separated by a given one character delimiter. Note that it has to be a one character delimiter due to the internal C operation requiring one char delimiter.
-The decoding can be done using the following function\n
+The decoding can be done using the following function
 ```python
 tf.decode_csv(value, record_defaults=record_defaults,field_delim='|')
 ```
-here, each default value in the record_defaults list results in a tensorflow operation. For example if we have 3 default values we have\n
+here, each default value in the record_defaults list results in a tensorflow operation. For example if we have 3 default values we have
 ```python
 default1_op, default2_op, default3_op = tf.decode_csv(value, record_defaults=record_defaults,field_delim='|')
 ```
-where all the returned values are tensorflow operations that return the mentioned column when run\n
-Before running the operations from the tensorflow csv decoder, we need to use a queue runner which should be coordinated by a coordinator and this needs to be done within the tensorflow session\n
+where all the returned values are tensorflow operations that return the mentioned column when run
+Before running the operations from the tensorflow csv decoder, we need to use a queue runner which should be coordinated by a coordinator and this needs to be done within the tensorflow session
 ```python
-coord = tf.train.Coordinator()\n
-threads = tf.train.start_queue_runners(coord=coord)\n
+coord = tf.train.Coordinator()
+threads = tf.train.start_queue_runners(coord=coord)
 ```
 after this, each time the operations from the decoder are run, they return their respective column from one line of the input files
