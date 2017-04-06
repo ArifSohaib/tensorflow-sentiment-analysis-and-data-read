@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 import csv
-
+from tqdm import tqdm
 import pickle
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
@@ -52,6 +52,36 @@ def init_process(fin, fout):
 
     outfile.close()
 
+def file_len(fname):
+    with open(fname) as f:
+        for i, l in enumerate(f):
+            pass
+    return i + 1
+
+def create_lexicon(fin):
+    """
+    Creates lexocon
+    """
+    lexicon = []
+    with open(fin, 'r', buffering=100000, encoding='latin-1') as f:
+        try:
+            counter = 1
+            content = ''
+            for line in tqdm(f,total=file_len(fin)):
+                counter += 1
+                if (counter/2500.0).is_integer():
+                    tweet = line.split('|')[3]
+                    content += ' '+tweet
+                    words = word_tokenize(content)
+                    words = [lemmatizer.lemmatize(i) for i in words]
+                    lexicon = list(set(lexicon + words))
+                    # print(counter, len(lexicon))
+
+        except Exception as e:
+            print(str(e))
+
+    with open('lexicon.pickle','wb') as f:
+        pickle.dump(lexicon,f)
 
 def read_to_vec(fin, lexicon):
     """generates a vector for a line(USE GENERATOR)
@@ -108,7 +138,7 @@ def read_record(filename_queue):
     #get ops to read the values
     cat1, cat2, cat3, raw_tweet_op = tf.decode_csv(value, record_defaults=record_defaults,field_delim='|')
     #combine the labels into one list
-    label_op = tf.pack([cat1,cat2,cat3])
+    label_op = tf.stack([cat1,cat2,cat3])
 
     return raw_tweet_op, label_op
 
@@ -190,16 +220,16 @@ def shuffle_data(fin):
     with open(fin,'r') as source:
         data = [ (random.random(), line) for line in source ]
     data.sort()
-    with open('shuffled_train_data.csv','w') as target:
+    with open('./data/shuffled_train_data.csv','w') as target:
         for _, line in data:
             target.write( line )
 
 
 def main():
     """uncomment to make the csv file"""
-    # init_process('training.1600000.processed.noemoticon.csv','train_data.csv')
-    # init_process('testdata.manual.2009.06.14.csv','test_data.csv')
-    with open('../lexicon.pickle','rb') as f:
+    # init_process('./data/training.1600000.processed.noemoticon.csv','./data/train_data.csv')
+    # init_process('./data/testdata.manual.2009.06.14.csv','./data/test_data.csv')
+    with open('./lexicon.pickle','rb') as f:
         lexicon = pickle.load(f)
 
     """uncomment to test the generator function"""
@@ -259,10 +289,10 @@ def main():
 
 
     """uncomment to shuffle the input file and check 10 records"""
-    # shuffle_data('train_data.csv')
-    # with open('shuffled_train_data.csv','r') as f:
-    #     for i in range(10):
-    #         print(f.readline())
+    shuffle_data('./data/train_data.csv')
+    with open('./data/shuffled_train_data.csv','r') as f:
+        for i in range(10):
+            print(f.readline())
 
 if __name__ == '__main__':
     """
@@ -270,6 +300,6 @@ if __name__ == '__main__':
     """
     # import time
     # start = time.time()
-    # main()
+    main()
     # fin = time.time()
     # print(fin-start)

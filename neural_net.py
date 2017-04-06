@@ -13,19 +13,21 @@ n_nodes_hl3 = 500
 #numner of classes. In our case it is positive, negative and neutral
 n_classes = 3
 
-batch_size=128
+batch_size=512
 #there are 1600000 lines in the training data
 total_batches = int(1600000/batch_size)
 #total number of epochs(epoch is number of times the whole data set is seen )
 hm_epochs = 5
 #placeholders for the input and output
-x = tf.placeholder(tf.float32,shape=[None, 2638])
+# x = tf.placeholder(tf.float32,shape=[None, 2638])
+x = tf.placeholder(tf.float32,shape=[None, 3007])
 y = tf.placeholder(tf.float32)
 
 #Define the hidden layers' weights and biases
 #the 2638 is the number of words in the lexicon created using the training data
 hidden_1_layer = {'f_fum':n_nodes_hl1,
-                  'weight':tf.Variable(tf.random_normal([2638, n_nodes_hl1])),
+                #   'weight':tf.Variable(tf.random_normal([2638, n_nodes_hl1])),
+                  'weight':tf.Variable(tf.random_normal([3007, n_nodes_hl1])),
                   'bias':tf.Variable(tf.random_normal([n_nodes_hl1]))}
 
 hidden_2_layer = {'f_fum':n_nodes_hl2,
@@ -75,7 +77,7 @@ def train_neural_network(x):
     prediction = neural_network_model(x)
     #cost operation
     #tf.nn.softmax_cross_entropy_with_logits is used instead of tf.nn.softmax when we have one-hot vectors as both the labels and the output from the network
-    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(prediction, y))
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=y))
 
     global_step = tf.Variable(0, trainable=False)
     starter_learning_rate = 0.1
@@ -87,9 +89,9 @@ def train_neural_network(x):
     #NOTE Following line is disabled to check decaying learning_rate
     # optimizer = tf.train.AdamOptimizer().minimize(cost)
     #queue of input files
-    filename_queue = tf.train.string_input_producer(['shuffled_train_data.csv'],num_epochs=hm_epochs)
+    filename_queue = tf.train.string_input_producer(['./data/shuffled_train_data.csv'],num_epochs=hm_epochs)
     #get the lexicon built and saved previously from the training data
-    with open('../lexicon.pickle', 'rb') as f:
+    with open('./lexicon.pickle', 'rb') as f:
         lexicon = pickle.load(f)
     #tensorflow operations to get one tweet and one set of one-hot labels from the input file
     tweet_op, label_op = read_record(filename_queue)
@@ -98,9 +100,9 @@ def train_neural_network(x):
     with tf.Session() as sess:
         #the tensorflow variables(eg; weights and biases declared earlier) have to be initialized using this function
         #otherwise they are just tensors describing those variables
-        sess.run(tf.initialize_all_variables())
+        sess.run(tf.global_variables_initializer())
         #the epoch is counted internally in tensorflow. This counter needs to be initialized using this function
-        sess.run(tf.initialize_local_variables())
+        sess.run(tf.local_variables_initializer())
         #try to get the epoch number from the log file
         try:
             epoch =int(open(tf_log,'r').read().split('\n')[-2])+1
@@ -156,6 +158,7 @@ def train_neural_network(x):
                     #show the batch loss and the number of batches run in the given epoch
                     print('Batch run: {}/{} | Epoch: {} | Batch Loss: {}'.format(batches_run,total_batches, epoch, c))
                 if batches_run == total_batches: #meaning one epoch completed
+                    print("saving model")
                     saver.save(sess, 'model.ckpt') #save the variables at each epoch
 
                     print('Epoch: {}, completed out of {}, Loss = {}'.format(epoch, hm_epochs, epoch_loss))
@@ -169,8 +172,6 @@ def train_neural_network(x):
             coord.request_stop()
             threads.join(coord)
 
-# train_neural_network(x)
-
 def test_neural_network():
     """
     Function to test the neural network
@@ -179,7 +180,7 @@ def test_neural_network():
     #tensorflow op to get prediction
     prediction = neural_network_model(x)
     #tensorflow queue for the input file
-    filename_queue = tf.train.string_input_producer(['test_data.csv'],num_epochs=1)
+    filename_queue = tf.train.string_input_producer(['./data/test_data.csv'],num_epochs=1)
     #tensorflow op to check if prediction is correct
     #the argmax function gives the index of the maximum value on the given axis. In this case axis 1
     #axis 1 meaning the row axis here
@@ -192,15 +193,15 @@ def test_neural_network():
     labels = []
 
     #get the lexicon
-    with open('../lexicon.pickle','rb') as f:
+    with open('./lexicon.pickle','rb') as f:
         lexicon = pickle.load(f)
     #tensorflow operation to get one tweet and one set of labels
     tweet_op, label_op = read_record(filename_queue)
     with tf.Session() as sess:
         #initialize the saved variables
-        sess.run(tf.initialize_all_variables())
+        sess.run(tf.global_variables_initializer())
         #this is required to initialize the internal epoch counter used by the filename_queue
-        sess.run(tf.initialize_local_variables())
+        sess.run(tf.local_variables_initializer())
         #get the trained model or show an error
         try:
             # print(saver.latest_checkpoint())
@@ -258,5 +259,7 @@ def test_neural_network():
             coord.request_stop()
             # threads.join(coord)
 
-print('testing net')
-test_neural_network()
+if __name__ == '__main__':
+    #uncomment to train the network
+    # train_neural_network(x)
+    test_neural_network()
